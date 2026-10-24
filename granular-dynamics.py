@@ -5,28 +5,40 @@ from matplotlib.animation import FuncAnimation
 # ============================================================
 # 1. Параметры модели
 # ============================================================
-N            = 700
+# --- Параметры частиц (смесь) ---
+N1 = 50          # Количество частиц первого типа
+R1 = 0.50         # Радиус частиц первого типа
+
+N2 = 250          # Количество частиц второго типа
+R2 = 1.00         # Радиус частиц второго типа
+
+N = N1 + N2       # Общее количество частиц
+
+# --- Физические параметры ---
 Lx, Ly       = 40.0, 80.0        # размеры сосуда
-r_min, r_max = 0.50, 0.65        # радиусы дисков
-rho          = 1.0
-g            = 9.8
+rho          = 1.0               # плотность
+g            = 9.8               # ускорение свободного падения
 k_n          = 10000.0           # нормальная жёсткость
 gamma_n      = 20.0              # нормальная вязкость (диссипация)
-mu           = 0.3              # коэф. трения
+mu           = 0.30              # коэф. трения
 gamma_t      = 10.0              # тангенциальная вязкость
 dt           = 0.001             # шаг Верле
 
 # --- Параметры остановки ---
-T_max        = 100.0             # Максимальное время (защита от вечного цикла)
-v_threshold  = 0.01              # Порог скорости (теперь 0.01)
-settle_time  = 0.5               # Сколько секунд скорость должна держаться ниже порога
-settle_steps = int(settle_time / dt)
-extra_time   = 5.0               # Дополнительный запас времени (5 секунд)
+T_max             = 100.0        # Максимальное время моделирования
+rel_change_thresh = 0.001        # 0.1% изменения скорости для остановки
+quiet_steps_needed = 200         # Сколько шагов держать условие (0.2 сек)
 
 save_every   = 100
 
-rng    = np.random.default_rng()
-radii  = rng.uniform(r_min, r_max, N)
+# ============================================================
+# 2. Инициализация массивов
+# ============================================================
+rng = np.random.default_rng()
+
+radii = np.concatenate([np.full(N1, R1), np.full(N2, R2)])
+rng.shuffle(radii) 
+
 masses = rho * np.pi * radii**2
 
 _pi, _pj = np.triu_indices(N, k=1)
@@ -34,14 +46,14 @@ _rs      = radii[_pi] + radii[_pj]
 _rs2     = _rs * _rs
 
 # ============================================================
-# 2. Начальное состояние
+# 3. Начальное состояние
 # ============================================================
 pos = np.zeros((N, 2))
 placed = 0
 y_min_init = Ly * 0.4
-y_max_init = Ly - r_max - 0.1
-x_min_init = r_max + 0.1
-x_max_init = Lx - r_max - 0.1
+y_max_init = Ly - np.max(radii) - 0.1
+x_min_init = np.max(radii) + 0.1
+x_max_init = Lx - np.max(radii) - 0.1
 
 while placed < N:
     cand = np.array([rng.uniform(x_min_init, x_max_init),
@@ -58,7 +70,7 @@ while placed < N:
 vel = np.zeros_like(pos)
 
 # ============================================================
-# 3. Силы
+# 4. Функция вычисления сил
 # ============================================================
 def compute_forces(pos, vel):
     dx = pos[_pj,0] - pos[_pi,0]
@@ -108,15 +120,15 @@ def compute_forces(pos, vel):
     return fx, fy
 
 # ============================================================
-# 4. Velocity-Verlet с динамической остановкой (+5 сек)
+# 5. Velocity-Verlet с динамической остановкой
 # ============================================================
 n_steps = int(T_max/dt)
 frames, times, KE_arr, PE_arr = [], [], [], []
 
 print("Идет моделирование, пожалуйста подождите...")
 quiet_counter = 0
-is_settled = False
-settle_timestamp = 0.0
+prev_v_max = 0.0
+relaxation_time = T_max
 
 for step in range(n_steps):
     fx, fy = compute_forces(pos, vel)
@@ -128,60 +140,134 @@ for step in range(n_steps):
     vel[:,1] += 0.5*dt*fy/masses
 
     current_time = step * dt
-
-    # --- Проверка на успокоение ---
     v_max = np.max(np.linalg.norm(vel, axis=1))
-    if v_max < v_threshold:
-        quiet_counter += 1
-        if quiet_counter >= settle_steps and not is_settled:
-            print(f"✅ Система успокоилась на t = {current_time:.2f} сек. Ждем еще {extra_time} сек для стабилизации...")
-            is_settled = True
-            settle_timestamp = current_time
+
+    if v_max < 0.1: 
+        if step > 0 and prev_v_max > 1e-6:
+            rel_change = abs(v_max - prev_v_max) / prev_v_max
+        else:
+            rel_change = 0.0
+        if rel_change < rel_change_thresh:
+            quiet_counter += 1
+        else:
+            quiet_counter = 0
     else:
         quiet_counter = 0
+    prev_v_max = v_max
 
-    # --- Сохранение кадров ---
-    if step % save_every == 0:
-        frames.append(pos.copy())
-        times.append(current_time)
-        KE_arr.append(0.5*np.sum(masses*(vel[:,0]**2 + vel[:,1]**2)))
-        PE_arr.append(np.sum(masses*g*pos[:,1]))
-
-    # --- Остановка, если истекло добавочное время ---
-    if is_settled and (current_time >= settle_timestamp + extra_time):
-        print(f"🛑 Моделирование завершено на t = {current_time:.2f} сек. (включая +5 сек запаса)")
-        # Записываем финальный кадр
+    if quiet_counter >= quiet_steps_needed:
+        relaxation_time = current_time
+        print(f"✅ Система успокоилась! Время релаксации: t = {relaxation_time:.2f} сек.")
         frames.append(pos.copy())
         times.append(current_time)
         KE_arr.append(0.5*np.sum(masses*(vel[:,0]**2 + vel[:,1]**2)))
         PE_arr.append(np.sum(masses*g*pos[:,1]))
         break
+
+    if step % save_every == 0:
+        frames.append(pos.copy())
+        times.append(current_time)
+        KE_arr.append(0.5*np.sum(masses*(vel[:,0]**2 + vel[:,1]**2)))
+        PE_arr.append(np.sum(masses*g*pos[:,1]))
 else:
-    print(f"⚠️ Достигнут лимит времени T_max = {T_max} сек. Система всё еще колеблется.")
+    print(f"⚠️ Достигнут лимит T_max = {T_max} сек.")
 
 # ============================================================
-# 5. Визуализация
+# 6. ТОЧНЫЙ РАСЧЕТ КОЭФФИЦИЕНТА (ПО КОНТУРУ)
 # ============================================================
-fig = plt.figure(figsize=(12, 7), dpi=100)
+def calculate_packing_fraction_contour(pos, radii, Lx, num_bins=1000):
+    # 1. Идеальная площадь всех дисков
+    area_particles = np.sum(np.pi * radii**2)
+    
+    # Вычитаем площадь перекрытия (так как диски "мягкие" и немного сжаты)
+    dx = pos[:,0][:,None] - pos[:,0][None,:]
+    dy = pos[:,1][:,None] - pos[:,1][None,:]
+    dist = np.sqrt(dx**2 + dy**2)
+    rs = radii[:,None] + radii[None,:]
+    np.fill_diagonal(dist, np.inf)
+    overlaps = np.maximum(0, rs - dist)
+    # Точная площадь пересечения двух кругов (приближенно для малых перекрытий)
+    area_overlap = np.sum(np.pi * (overlaps/2)**2) / 2
+    area_effective = area_particles - area_overlap
 
-ax = fig.add_axes([0.03, 0.05, 0.40, 0.90])
+    # 2. Интегрирование верхнего контура (обходим шарики, как вы нарисовали)
+    x_grid = np.linspace(0, Lx, num_bins)
+    y_top = np.zeros_like(x_grid)
+    
+    for i, x in enumerate(x_grid):
+        # Находим расстояние по горизонтали от текущей полоски x до центров всех частиц
+        dx_centers = np.abs(pos[:, 0] - x)
+        # Частицы, которые перекрывают эту вертикальную линию
+        mask = dx_centers < radii
+        if np.any(mask):
+            # Высота верхней дуги круга в точке x (по теореме Пифагора: y = yc + sqrt(r^2 - dx^2))
+            y_vals = pos[mask, 1] + np.sqrt(radii[mask]**2 - dx_centers[mask]**2)
+            y_top[i] = np.max(y_vals)
+        else:
+            y_top[i] = 0.0
+            
+    # Площадь под кривой (сумма площадей узких прямоугольников)
+    area_layer = np.sum(y_top) * (Lx / num_bins)
+    
+    return area_effective / area_layer if area_layer > 0 else 0.0
+
+def validate_result(pos, vel, radii, Lx, Ly):
+    errors = []
+    if np.any(np.isnan(pos)) or np.any(np.isinf(pos)): errors.append("NaN/Inf в координатах")
+    if np.min(pos[:,0] - radii) < -0.1: errors.append("Выход за левую стенку")
+    if np.max(pos[:,0] + radii) > Lx + 0.1: errors.append("Выход за правую стенку")
+    if np.min(pos[:,1] - radii) < -0.1: errors.append("Выход за дно")
+    return errors
+
+# Расчет
+packing_fraction = calculate_packing_fraction_contour(pos, radii, Lx)
+validation_errors = validate_result(pos, vel, radii, Lx, Ly)
+
+print(f"\n--- РЕЗУЛЬТАТЫ ---")
+print(f"Время релаксации: {relaxation_time:.2f} сек")
+print(f"Коэффициент заполнения: {packing_fraction:.4f} ({packing_fraction*100:.1f}%)")
+if validation_errors:
+    print("❌ ОШИБКИ ВАЛИДАЦИИ:")
+    for err in validation_errors: print(f"  - {err}")
+else:
+    print("✅ Валидация пройдена.")
+
+# ============================================================
+# 7. Визуализация (с отрисовкой красной линии)
+# ============================================================
+fig = plt.figure(figsize=(16, 7), dpi=100)
+mixture_info = f"Состав:\n{N1} шт. × R={R1}\n{N2} шт. × R={R2}"
+
+# --- 1. Левая колонка: Анимация ---
+ax = fig.add_axes([0.02, 0.05, 0.28, 0.85])
 ax.set_xlim(0, Lx); ax.set_ylim(0, Ly)
 ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
 ax.plot([0,Lx],[0,0],'k-',lw=2.5); ax.plot([0,0],[0,Ly],'k-',lw=2.5); ax.plot([Lx,Lx],[0,Ly],'k-',lw=2.5)
 
-ax2 = fig.add_axes([0.52, 0.55, 0.44, 0.40])
+info_text = ax.text(0.02, 0.98, "", transform=ax.transAxes, 
+                    va='top', ha='left', fontsize=10, bbox=dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9))
+
+# --- 2. Центральная колонка: Конечная упаковка + Красная линия ---
+ax3 = fig.add_axes([0.33, 0.05, 0.28, 0.85])
+ax3.set_xlim(0, Lx); ax3.set_ylim(0, Ly)
+ax3.set_aspect('equal'); ax3.set_xticks([]); ax3.set_yticks([])
+ax3.plot([0,Lx],[0,0],'k-',lw=2); ax3.plot([0,0],[0,Ly],'k-',lw=2); ax3.plot([Lx,Lx],[0,Ly],'k-',lw=2)
+
+final_text_str = (f"Время релаксации: {relaxation_time:.2f} c\n"
+                  f"Коэф. заполнения: {packing_fraction:.3f}\n"
+                  f"{mixture_info}")
+ax3.text(0.02, 0.98, final_text_str, transform=ax3.transAxes, 
+         va='top', ha='left', fontsize=10, bbox=dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9))
+
+# --- 3. Правая колонка: График энергии ---
+ax2 = fig.add_axes([0.65, 0.20, 0.33, 0.65]) 
 ax2.plot(times, KE_arr, 'r-',  label='Кинетическая энергия')
 ax2.plot(times, PE_arr, 'b-',  label='Потенциальная энергия')
 ax2.plot(times, np.array(KE_arr)+np.array(PE_arr), 'k-', label='Полная энергия')
 ax2.set_xlabel('Время (t)'); ax2.set_ylabel('Энергия')
 ax2.legend(); ax2.grid(alpha=0.3)
 
-ax3 = fig.add_axes([0.52, 0.05, 0.44, 0.40])
-ax3.set_xlim(0, Lx); ax3.set_ylim(0, Ly)
-ax3.set_aspect('equal'); ax3.set_xticks([]); ax3.set_yticks([])
-ax3.plot([0,Lx],[0,0],'k-',lw=2); ax3.plot([0,0],[0,Ly],'k-',lw=2); ax3.plot([Lx,Lx],[0,Ly],'k-',lw=2)
-
-# Отрисовка холста для расчета масштаба
+# Отрисовка холста для расчета масштаба частиц
 fig.canvas.draw()
 
 bbox         = ax.get_window_extent()
@@ -193,13 +279,23 @@ bbox3         = ax3.get_window_extent()
 pts_per_data3 = bbox3.width * 72 / fig.dpi / Lx
 ax3.scatter(frames[-1][:,0], frames[-1][:,1], s=(2*radii*pts_per_data3)**2,
             c='tan', edgecolors='k', linewidths=0.4, zorder=3)
-ax3.set_title(f"Конечная упаковка (t = {times[-1]:.2f})")
+
+# --- РИСУЕМ КРАСНУЮ ЛИНИЮ КОНТУРА НА ЦЕНТРАЛЬНОМ ГРАФИКЕ ---
+x_grid = np.linspace(0, Lx, 500)
+y_contour = np.zeros_like(x_grid)
+for i, x in enumerate(x_grid):
+    dx_centers = np.abs(pos[:, 0] - x)
+    mask = dx_centers < radii
+    if np.any(mask):
+        y_vals = pos[mask, 1] + np.sqrt(radii[mask]**2 - dx_centers[mask]**2)
+        y_contour[i] = np.max(y_vals)
+ax3.plot(x_grid, y_contour, 'r-', lw=2, label='Контур слоя')
 
 def animate(i):
     sc.set_offsets(frames[i])
-    ax.set_title(f"Модель мягких дисков  —  t = {times[i]:.2f}")
-    return sc,
+    t = times[i]
+    info_text.set_text(f"t = {t:.2f} c\nВремя релаксации: {relaxation_time:.2f} c\nКоэф. заполнения: {packing_fraction:.3f}\n{mixture_info}")
+    return sc, info_text
 
-ani = FuncAnimation(fig, animate, frames=len(frames),
-                    interval=40, blit=False, repeat=True)
+ani = FuncAnimation(fig, animate, frames=len(frames), interval=40, blit=False, repeat=True)
 plt.show()
