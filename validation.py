@@ -49,7 +49,7 @@ def compute_forces(pos, vel, radii, masses, gamma_n, gamma_t, mu, g):
         fy[idx] += np.maximum(k_n*(radii[idx] - pos[idx,1]) - gamma_n*vel[idx,1], 0)
     return fx, fy
 
-def calculate_packing_fraction_contour(pos, radii, Lx, num_bins=1000):
+def calculate_packing_fraction_contour(pos, radii, Lx, num_bins=10000):
     area_particles = np.sum(np.pi * radii**2)
     dx = pos[:,0][:,None] - pos[:,0][None,:]
     dy = pos[:,1][:,None] - pos[:,1][None,:]
