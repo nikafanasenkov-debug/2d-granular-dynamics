@@ -6,10 +6,10 @@ import os  # Добавлено для работы с папками
 # ============================================================
 # 1. Параметры модели
 # ============================================================
-N1 =  300       
+N1 =  0       
 R1 = 0.50        
 
-N2 = 0    
+N2 = 300    
 R2 = 1.00        
 
 N = N1 + N2      
@@ -27,7 +27,7 @@ T_max             = 100.0
 rel_change_thresh = 0.001        
 quiet_steps_needed = 200        
 
-save_every   = 20                
+save_every   = 200                
 
 rng = np.random.default_rng(69) 
 
@@ -307,7 +307,7 @@ if not os.path.exists(images_dir):
 
 ani = FuncAnimation(fig, animate, frames=len(frames), interval=40, blit=False, repeat=True)
 
-save_path = os.path.join(images_dir, 'simulation.gif')
+save_path = os.path.join(images_dir, 'exp_0_300.gif')
 print(f"\nСохраняю анимацию в файл: {save_path}")
 print("Это может занять 10-30 секунд...")
 
