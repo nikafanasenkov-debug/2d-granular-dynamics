@@ -17,7 +17,7 @@
 Пример процесса осаждения бинарной смеси (150 мелких частиц + 150 крупных частиц). Видно, как частицы падают, сталкиваются, диссипируют энергию и образуют устойчивую случайную упаковку.
 
 <p align="center">
-  <img src="images/exp_150_150.gif" alt="Демонстрация симуляции" width="400"/>
+  <img src="images/exp_150_150.gif" alt="Демонстрация симуляции"/>
 </p>
 
 ---
@@ -102,37 +102,37 @@
 
 <p align="center">
   <b>Смесь 150 / 150 (x = 0.50)</b><br>
-  <img src="images/exp_150_150.gif" alt="Смесь 150 на 150" width="300"/>
+  <img src="images/exp_150_150.gif" alt="Смесь 150 на 150"/>
 </p>
 
 <p align="center">
   <b>Смесь 200 / 100 (x = 0.67)</b><br>
-  <img src="images/exp_200_100.gif" alt="Смесь 200 на 100" width="300"/>
+  <img src="images/exp_200_100.gif" alt="Смесь 200 на 100"/>
 </p>
 
 <p align="center">
   <b>Смесь 250 / 50 (x = 0.83)</b><br>
-  <img src="images/exp_250_50.gif" alt="Смесь 250 на 50" width="300"/>
+  <img src="images/exp_250_50.gif" alt="Смесь 250 на 50"/>
 </p>
 
 <p align="center">
   <b>Смесь 100 / 200 (x = 0.33)</b><br>
-  <img src="images/exp_100_200.gif" alt="Смесь 100 на 200" width="300"/>
+  <img src="images/exp_100_200.gif" alt="Смесь 100 на 200"/>
 </p>
 
 <p align="center">
   <b>Смесь 50 / 250 (x = 0.17)</b><br>
-  <img src="images/exp_50_250.gif" alt="Смесь 50 на 250" width="300"/>
+  <img src="images/exp_50_250.gif" alt="Смесь 50 на 250"/>
 </p>
 
 <p align="center">
   <b>Только мелкие (300 / 0, x = 1.0)</b><br>
-  <img src="images/exp_300_0.gif" alt="Только мелкие" width="300"/>
+  <img src="images/exp_300_0.gif" alt="Только мелкие"/>
 </p>
 
 <p align="center">
   <b>Только крупные (0 / 300, x = 0.0)</b><br>
-  <img src="images/exp_0_300.gif" alt="Только крупные" width="300"/>
+  <img src="images/exp_0_300.gif" alt="Только крупные"/>
 </p>
 
 ### 4.3. Основные выводы
